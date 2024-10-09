@@ -4,9 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 
-// Add the polyfill here with a check for the window object
-if (typeof window !== 'undefined' && typeof Promise.withResolvers !== 'function') {
-  Promise.withResolvers = function<T>() {
+// TypeScript-compatible Polyfill for Promise.withResolvers
+if (typeof Promise.withResolvers !== 'function') {
+  Promise.withResolvers = function<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: any) => void } {
     let resolve!: (value: T | PromiseLike<T>) => void;
     let reject!: (reason?: any) => void;
     const promise = new Promise<T>((res, rej) => {
@@ -22,12 +22,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-interface Role {
-  title: string;
-  description: string;
-  matchScore: number;
-}
-
 export default function UserProfile() {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -40,6 +34,12 @@ export default function UserProfile() {
   const [jobMatches, setJobMatches] = useState<string[]>([]);
     const [summaryText, setSummaryText] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  type Role = {
+    title: string;
+    description: string;
+    matchScore: number;
+  };
+
   const [recommendedRoles, setRecommendedRoles] = useState<Role[]>([]);
   const [isRolesAnimating, setIsRolesAnimating] = useState(false);
 
@@ -50,17 +50,17 @@ export default function UserProfile() {
       setIsRolesAnimating(false);
     }, 300);
   };
-if (!Promise.withResolvers) {
-  Promise.withResolvers = function <T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: any) => void } {
-    let resolve: (value: T | PromiseLike<T>) => void = () => {};
-    let reject: (reason?: any) => void = () => {};
-    const promise = new Promise<T>((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
-    return { promise, resolve, reject };
-  };
-}
+  if (typeof window !== 'undefined' && typeof Promise.withResolvers !== 'function') {
+    Promise.withResolvers = function<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: any) => void } {
+      let resolve!: (value: T | PromiseLike<T>) => void;
+      let reject!: (reason?: any) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+  }
   const router = useRouter();
 
   const [aiProfile, setAiProfile] = useState<{
