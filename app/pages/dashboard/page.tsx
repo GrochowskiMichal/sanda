@@ -178,7 +178,7 @@ const generateRoleRecommendations = async (profileSummary: string) => {
     }
   } catch (error) {
     console.error('Error generating role recommendations:', error);
-    setError(`Failed to generate role recommendations. Error: ${error.message}`);
+    setError(`Failed to generate role recommendations. Error:`);
   }
 };
 
@@ -229,7 +229,7 @@ const generateProfileSummary = async (extractedText: string) => {
     }
   } catch (error) {
     console.error('Error generating profile summary:', error);
-    setError(`Failed to generate profile summary. Error: ${error.message}`);
+    setError(`Failed to generate profile summary. Error: `);
   }
 };
 
