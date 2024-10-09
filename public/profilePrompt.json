@@ -1,0 +1,3 @@
+{
+    "prompt": "Analyze the following resume and generate a detailed professional summary based on the available information. The summary should capture the candidate's key strengths, experiences, skills, and any relevant achievements. Ensure the summary reflects the candidate’s role, years of experience, notable projects or contributions, and expertise in specific areas. The goal is to provide a cohesive narrative about the candidate’s qualifications without adding any assumptions or missing any explicit details from the resume.\n\n{extractedText}\n\nProvide the output as a single, well-written summary."
+}
