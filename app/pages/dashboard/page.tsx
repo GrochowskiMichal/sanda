@@ -38,7 +38,17 @@ export default function UserProfile() {
       setIsRolesAnimating(false);
     }, 300);
   };
-
+if (!Promise.withResolvers) {
+  Promise.withResolvers = function <T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: any) => void } {
+    let resolve: (value: T | PromiseLike<T>) => void = () => {};
+    let reject: (reason?: any) => void = () => {};
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
   const router = useRouter();
 
   const [aiProfile, setAiProfile] = useState<{
