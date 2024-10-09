@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 
-
+// Move Promise.withResolvers polyfill outside component
 if (typeof Promise.withResolvers !== 'function') {
   (Promise as any).withResolvers = function<T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;
@@ -17,41 +17,14 @@ if (typeof Promise.withResolvers !== 'function') {
   };
 }
 
-// Replace PDF.js initialization with this
-let pdfjsLib: any;
-useEffect(() => {
-  const loadPDFjs = async () => {
-    pdfjsLib = await import('pdfjs-dist');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.mjs';
-  };
-  loadPDFjs();
-}, []);
-
-// Update the extractTextFromPDF function to use pdfjsLib
-const extractTextFromPDF = async (file: File): Promise<string> => {
-  if (!pdfjsLib) {
-    throw new Error('PDF.js library not loaded');
-  }
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const maxPages = pdf.numPages;
-  let extractedText = '';
-
-  for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item: any) => item.str).join(' ');
-    extractedText += ` ${pageText}`;
-  }
-
-  return extractedText;
-};
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function UserProfile() {
+  const router = useRouter();
+  // Add state for pdfjsLib
+  const [pdfjsLib, setPdfjsLib] = useState<any>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileType, setFileType] = useState<string | null>(null);
@@ -61,8 +34,9 @@ export default function UserProfile() {
   const [uploading, setUploading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [jobMatches, setJobMatches] = useState<string[]>([]);
-    const [summaryText, setSummaryText] = useState('');
+  const [summaryText, setSummaryText] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+
   type Role = {
     title: string;
     description: string;
@@ -71,27 +45,6 @@ export default function UserProfile() {
 
   const [recommendedRoles, setRecommendedRoles] = useState<Role[]>([]);
   const [isRolesAnimating, setIsRolesAnimating] = useState(false);
-
-  const updateRolesWithAnimation = (newRoles: Role[]) => {
-    setIsRolesAnimating(true);
-    setTimeout(() => {
-      setRecommendedRoles(newRoles);
-      setIsRolesAnimating(false);
-    }, 300);
-  };
-  if (typeof window !== 'undefined' && typeof Promise.withResolvers !== 'function') {
-    Promise.withResolvers = function<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: any) => void } {
-      let resolve!: (value: T | PromiseLike<T>) => void;
-      let reject!: (reason?: any) => void;
-      const promise = new Promise<T>((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
-      return { promise, resolve, reject };
-    };
-  }
-  const router = useRouter();
-
   const [aiProfile, setAiProfile] = useState<{
     name: string;
     title: string;
@@ -105,9 +58,44 @@ export default function UserProfile() {
     { role: "Junior Developer", company: "StartupXYZ", period: "2015 - 2017" }
   ]);
 
+  // Move PDF.js initialization inside component
+  useEffect(() => {
+    const loadPDFjs = async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.mjs';
+        setPdfjsLib(pdfjs);
+      } catch (error) {
+        console.error('Error loading PDF.js:', error);
+        setError('Failed to load PDF processing library');
+      }
+    };
+    loadPDFjs();
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Update extractTextFromPDF to use pdfjsLib from state
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    if (!pdfjsLib) {
+      throw new Error('PDF.js library not loaded');
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const maxPages = pdf.numPages;
+    let extractedText = '';
+
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      extractedText += ` ${pageText}`;
+    }
+
+    return extractedText;
+  };
 
   const fetchData = async () => {
     try {
@@ -128,70 +116,20 @@ export default function UserProfile() {
     }
   };
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const maxPages = pdf.numPages;
-    let extractedText = '';
-
-    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item: { str: string }) => item.str).join(' ');
-      extractedText += ` ${pageText}`;
-    }
-
-    return extractedText;
+  const updateRolesWithAnimation = (newRoles: Role[]) => {
+    setIsRolesAnimating(true);
+    setTimeout(() => {
+      setRecommendedRoles(newRoles);
+      setIsRolesAnimating(false);
+    }, 300);
   };
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0) {
-      const file = event.target.files[0];
-      setUploading(true);
-      setIsExtracting(true);
-
-      try {
-        const { data, error } = await supabase.storage
-          .from('cv-uploads')
-          .upload(`cvs/${file.name}`, file, {
-            cacheControl: '3600',
-            upsert: false,
-          });
-
-        if (error) throw error;
-
-        const extractedText = await extractTextFromPDF(file);
-
-        if (data) {
-          const filePath = data.path;
-          sessionStorage.setItem('submittedCVPath', filePath);
-          sessionStorage.setItem('submittedCVName', file.name);
-          sessionStorage.setItem('submittedCVType', file.type);
-
-          const { error: insertError } = await supabase.from('pdf_texts').insert([
-            { file_url: `${supabaseUrl}/storage/v1/object/public/cv-uploads/${filePath}`, text: extractedText },
-          ]);
-
-          if (insertError) throw insertError;
-
-          setExtractedText(extractedText);
-          fetchData();
-        }
-      } catch (error) {
-        console.error('Error processing file:', error);
-        setError('An error occurred while processing the file.');
-      } finally {
-        setUploading(false);
-        setIsExtracting(false);
-      }
-    }
-  };
   const updateSummaryWithAnimation = (newText: string) => {
     setIsAnimating(true);
     setTimeout(() => {
       setSummaryText(newText);
       setIsAnimating(false);
-    }, 300); // Match this timing with CSS transition duration
+    }, 300);
   };
 // Modify the generateProfileSummary function
 const generateRoleRecommendations = async (profileSummary: string) => {
@@ -283,6 +221,37 @@ const generateProfileSummary = async (extractedText: string) => {
     setError(`Failed to generate profile summary. Error: `);
   }
 };
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('cv-uploads')
+        .upload(`public/${file.name}`, file);
+
+      if (error) {
+        throw error;
+      }
+
+      sessionStorage.setItem('submittedCVPath', data.path);
+      sessionStorage.setItem('submittedCVName', file.name);
+      sessionStorage.setItem('submittedCVType', file.type);
+
+      setFileUrl(`${supabaseUrl}/storage/v1/object/public/cv-uploads/${data.path}`);
+      setFileName(file.name);
+      setFileType(file.type);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      setError('Failed to upload file. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleExtractText = async () => {
     if (!fileUrl) {
