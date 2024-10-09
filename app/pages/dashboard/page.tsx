@@ -2,11 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
+import dynamic from 'next/dynamic';
 
-// TypeScript-compatible Polyfill for Promise.withResolvers
+
 if (typeof Promise.withResolvers !== 'function') {
-  Promise.withResolvers = function<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: any) => void } {
+  (Promise as any).withResolvers = function<T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;
     let reject!: (reason?: any) => void;
     const promise = new Promise<T>((res, rej) => {
@@ -17,7 +17,36 @@ if (typeof Promise.withResolvers !== 'function') {
   };
 }
 
-GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.mjs';
+// Replace PDF.js initialization with this
+let pdfjsLib: any;
+useEffect(() => {
+  const loadPDFjs = async () => {
+    pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/pdf.worker.mjs';
+  };
+  loadPDFjs();
+}, []);
+
+// Update the extractTextFromPDF function to use pdfjsLib
+const extractTextFromPDF = async (file: File): Promise<string> => {
+  if (!pdfjsLib) {
+    throw new Error('PDF.js library not loaded');
+  }
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const maxPages = pdf.numPages;
+  let extractedText = '';
+
+  for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map((item: any) => item.str).join(' ');
+    extractedText += ` ${pageText}`;
+  }
+
+  return extractedText;
+};
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -101,14 +130,14 @@ export default function UserProfile() {
 
   const extractTextFromPDF = async (file: File): Promise<string> => {
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await getDocument({ data: arrayBuffer }).promise;
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const maxPages = pdf.numPages;
     let extractedText = '';
 
     for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(item => (item as any).str).join(' ');
+      const pageText = textContent.items.map((item: { str: string }) => item.str).join(' ');
       extractedText += ` ${pageText}`;
     }
 
